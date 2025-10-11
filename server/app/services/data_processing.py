@@ -5,9 +5,9 @@ from typing import Generator
 from io import BytesIO
 from docling.document_converter import DocumentConverter, Tuple, DocumentStream
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from .embedding import find_cosine_similarity
-from .vector_db import insert_text_chunk
-from .graph_db import insert_chunk_to_graphdb
+from app.services.embedding import find_cosine_similarity
+from app.services.vector_db import insert_text_chunk
+from app.services.graph_db import insert_chunk_to_graphdb
 
 
 # Get File bytes stream
@@ -61,6 +61,17 @@ def get_page_batches(
     for start in range(1, total_pages, batch_size):
         end = min(start + batch_size, total_pages)
         yield (start, end)
+
+
+# Get PDF Page Range Batch Bytes Stream
+def get_batch_stream(doc, page_range):
+    new_pdf = fitz.open()
+    for i in range(page_range[0] - 1, page_range[1]):
+        new_pdf.insert_pdf(doc, from_page=i, to_page=i)
+    output_stream = BytesIO()
+    new_pdf.save(output_stream)
+    output_stream.seek(0)
+    return output_stream
 
 
 # Convert pdf to markdown using docling
