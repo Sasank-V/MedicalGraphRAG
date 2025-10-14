@@ -18,7 +18,7 @@ export const useUserDetailsStore = create<UserState>((set) => ({
   activeChat: "",
   setActiveChat: (chatId) => set({ activeChat: chatId }),
   setChats: (chats) => set({ chats: chats }),
-  addChat: (chat) => set((state) => ({ chats: [...state.chats, chat] })),
+  addChat: (chat) => set((state) => ({ chats: [chat, ...state.chats] })),
   clearChats: () => set({ chats: [] }),
   setLoading: (loading) => set({ isLoading: loading }),
 }))
