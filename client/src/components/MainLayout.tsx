@@ -1,6 +1,5 @@
 "use client";
 
-import React, { useState } from "react";
 import {
     LogOut,
     Plus,
@@ -10,56 +9,72 @@ import {
     MessageCircle,
     ChevronLeft,
 } from "lucide-react";
+
+import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
+import { IChat } from "@/lib/types";
+import { redirect, usePathname } from "next/navigation";
+import { useUserDetailsStore } from "@/stores/userDetailsStore";
 
-const mockChats = [
-    {
-        id: "1",
-        title: "Hypertension Treatment",
-        lastMessage: "What are the latest guidelines for...",
-        timestamp: "2m ago",
-        unread: true,
-    },
-    {
-        id: "2",
-        title: "Diabetes Management",
-        lastMessage: "Can you explain the HbA1c...",
-        timestamp: "1h ago",
-        unread: false,
-    },
-    {
-        id: "3",
-        title: "Cardiology Consultation",
-        lastMessage: "What are the symptoms of...",
-        timestamp: "3h ago",
-        unread: false,
-    },
-    {
-        id: "4",
-        title: "Medication Interactions",
-        lastMessage: "Are there any contraindications...",
-        timestamp: "1d ago",
-        unread: false,
-    },
-    {
-        id: "5",
-        title: "Pediatric Guidelines",
-        lastMessage: "Dosage recommendations for...",
-        timestamp: "2d ago",
-        unread: false,
-    },
-];
-
-const Sidebar = ({ children }: { children: React.ReactNode }) => {
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [currentChatId, setCurrentChatId] = useState("1");
-    const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+const MainLayout = ({ children }: { children: React.ReactNode }) => {
     const { data: session, status } = useSession();
+    const pathname = usePathname();
+
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+    
+    const {chats, setChats, activeChat, setActiveChat} = useUserDetailsStore();
+
 
     const loadChat = (chatId: string) => {
-        setCurrentChatId(chatId);
+        setActiveChat(chatId)
+        redirect(`/chat/${chatId}`);
+    };
+
+    useEffect(() => {
+        const getChats = async () => {
+            try {
+                const res = await fetch(
+                    `/api/chat?email=${session?.user?.email}`,
+                );
+
+                const { chats } = await res.json();
+
+                const sortedChats = chats.sort(
+                    (a: IChat, b: IChat) =>
+                        new Date(b.lastUpdated!).getTime() -
+                        new Date(a.lastUpdated!).getTime()
+                );
+
+                setChats(sortedChats);
+                console.log(sortedChats);
+            } catch (err: any) {
+                console.log(err);
+                setChats([]);
+            }
+        };
+
+        getChats();
+    }, [session, status]);
+
+    const timeAgo = (dateString: string) => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+
+        const seconds = Math.floor(diff / 1000);
+        if (seconds < 60) return `${seconds}s ago`;
+
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
     };
 
     return (
@@ -127,7 +142,10 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                                             : "size-10 mx-auto"
                                     }`}
                                 >
-                                    <Link href="/" className="flex items-center justify-center gap-2 cursor-pointer">
+                                    <Link
+                                        href="/"
+                                        className="flex items-center justify-center gap-2 cursor-pointer"
+                                    >
                                         <Plus className="size-4 text-white" />
                                         {sidebarOpen && (
                                             <span className="font-medium text-white text-sm">
@@ -149,15 +167,15 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                                         </div>
 
                                         <div className="space-y-1">
-                                            {mockChats.map((chat) => (
+                                            {chats?.map((chat: IChat) => (
                                                 <button
-                                                    key={chat.id}
+                                                    key={chat._id}
                                                     onClick={() =>
-                                                        loadChat(chat.id)
+                                                        loadChat(chat._id)
                                                     }
                                                     className={`w-full text-left p-3 rounded-lg transition-all duration-200 group ${
-                                                        currentChatId ===
-                                                        chat.id
+                                                        pathname ===
+                                                        `/chat/${chat._id}`
                                                             ? "bg-blue-100 border-l-3 border-blue-600"
                                                             : "hover:bg-gray-100"
                                                     }`}
@@ -167,31 +185,28 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                                                             <div className="flex items-center gap-2 mb-1">
                                                                 <div
                                                                     className={`font-medium truncate text-sm ${
-                                                                        currentChatId ===
-                                                                        chat.id
+                                                                        activeChat ===
+                                                                        chat._id
                                                                             ? "text-blue-800"
                                                                             : "text-gray-800"
                                                                     }`}
                                                                 >
                                                                     {chat.title}
                                                                 </div>
-                                                                {chat.unread && (
+                                                                {/* {chat.unread && (
                                                                     <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-xs text-gray-600 truncate mb-1">
-                                                                {
-                                                                    chat.lastMessage
-                                                                }
+                                                                )} */}
                                                             </div>
                                                             <div className="text-xs text-gray-500">
-                                                                {chat.timestamp}
+                                                                {timeAgo(
+                                                                    chat.lastUpdated?.toString()!
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {currentChatId ===
-                                                        chat.id && (
+                                                    {activeChat ===
+                                                        chat._id && (
                                                         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-500 rounded-r"></div>
                                                     )}
                                                 </button>
@@ -236,12 +251,14 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                                                         {session.user?.name}
                                                     </div>
                                                     <div className="text-xs text-gray-600">
-                                                        {session.user?.email?.length! > 25
+                                                        {session.user?.email
+                                                            ?.length! > 25
                                                             ? `${session.user?.email?.substring(
                                                                   0,
                                                                   22
                                                               )}...`
-                                                            : session.user?.email}
+                                                            : session.user
+                                                                  ?.email}
                                                     </div>
                                                 </div>
                                             )}
@@ -309,7 +326,10 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                             </span>
                         </button>
                         <hr className="my-1 border-gray-200" />
-                        <button onClick={() => signOut()} className="w-full flex items-center gap-3 p-2 hover:bg-red-50 transition-all duration-200 rounded-md text-left">
+                        <button
+                            onClick={() => signOut()}
+                            className="w-full flex items-center gap-3 p-2 hover:bg-red-50 transition-all duration-200 rounded-md text-left"
+                        >
                             <LogOut className="w-4 h-4 text-red-500" />
                             <span className="text-sm text-red-600">
                                 Sign out
@@ -322,4 +342,4 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
     );
 };
 
-export default Sidebar;
+export default MainLayout;
