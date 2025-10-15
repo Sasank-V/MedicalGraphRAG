@@ -1,4 +1,17 @@
-import { IChat, IMessage } from "@/lib/types";
+import { IChat, IMessage, IUser } from "@/lib/types";
+
+export const getUserFromDb = async (email: string): Promise<IUser | null> => {
+    try {
+        const res = await fetch(`/api/user?email=${email}`);
+
+        const user = await res.json();
+
+        return user;
+    } catch (err) {
+        console.error(err);
+        return null;
+    }
+};
 
 export const getMessagesFromDb = async (
     chatId: string
