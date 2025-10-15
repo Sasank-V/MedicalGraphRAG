@@ -5,9 +5,9 @@ from typing import Generator
 from io import BytesIO
 from docling.document_converter import DocumentConverter, Tuple, DocumentStream
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from app.services.embedding import find_cosine_similarity
-from app.services.vector_db import insert_text_chunk
-from app.services.graph_db import insert_chunk_to_graphdb
+from services.embedding import find_cosine_similarity
+from services.vector_db import insert_text_chunk
+from services.graph_db import insert_chunk_to_graphdb
 
 
 # Get File bytes stream

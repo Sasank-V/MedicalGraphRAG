@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from app.models.db_models import init_db
-from app.services.graph_db import init_graph_db
-from app.services.vector_db import init_vector_db
+from models.db_models import init_db
+from services.graph_db import init_graph_db
+from services.vector_db import init_vector_db
 
 logger = logging.getLogger(__name__)
 

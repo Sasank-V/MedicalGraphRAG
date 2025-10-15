@@ -1,9 +1,9 @@
 import asyncio
 from datetime import datetime
-from app.models.worker_db import WorkerDB
-from app.core.logger import get_logger
-from app.models.db_models import update_job_status, JobStatus
-from app.services.graph_db import insert_chunk_to_graphdb
+from models.worker_db import WorkerDB
+from core.logger import get_logger
+from models.db_models import update_job_status, JobStatus
+from services.graph_db import insert_chunk_to_graphdb
 
 logger = get_logger()
 

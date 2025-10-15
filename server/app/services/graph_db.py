@@ -4,9 +4,9 @@ from langchain_neo4j import Neo4jGraph
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_core.documents import Document
 from langchain_neo4j import GraphCypherQAChain
-from app.services.llm_models import mistal_model
-from app.lib.graph import allowed_relationships
-from app.core.logger import get_logger
+from services.llm_models import mistal_model
+from lib.graph import allowed_relationships
+from core.logger import get_logger
 
 neo4j_connection_url = os.getenv("NEO4J_CONNECTION_URL")
 neo4j_username = os.getenv("NEO4J_USERNAME")

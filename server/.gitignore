@@ -1,5 +1,5 @@
 # Virtual environment
-rag-env/
+venv/
 
 # Python cache
 __pycache__/
