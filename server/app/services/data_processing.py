@@ -1,20 +1,25 @@
 import requests
 import fitz
-
-from typing import Generator
+import os
 from io import BytesIO
-from docling.document_converter import DocumentConverter, Tuple, DocumentStream
+from typing import Generator, Tuple
+from llama_cloud_services import LlamaParse
+from llama_index.core import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from services.embedding import find_cosine_similarity
 from services.vector_db import insert_text_chunk
-from services.graph_db import insert_chunk_to_graphdb
 
 
 # Get File bytes stream
 def get_file_bytes_stream(file_url: str, chunk_size: int = 8192) -> BytesIO | None:
     try:
         print(f"Downloading from: {file_url}")
-        response = requests.get(file_url, stream=True, timeout=30)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/116.0.0.0 Safari/537.36",
+            "Accept": "application/pdf,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        response = requests.get(file_url, stream=True, timeout=30, headers=headers)
         response.raise_for_status()
 
         # Check content type
@@ -74,23 +79,35 @@ def get_batch_stream(doc, page_range):
     return output_stream
 
 
-# Convert pdf to markdown using docling
-def convert_pdf_to_markdown(file_stream: BytesIO, page_range: Tuple[int, int]) -> str:
-    print(f"Processing pages: {page_range}")
+# Convert PDF to Markdown using LlamaIndex
+async def convert_pdf_to_markdown_async(
+    file_stream: BytesIO, page_range: Tuple[int, int], file_name: str
+) -> str:
     file_stream.seek(0)
-
-    # Validate stream has content
     if file_stream.getvalue() == b"":
-        raise Exception("File stream is empty")
+        raise ValueError("Empty input stream")
 
-    batch_stream = BytesIO(file_stream.getvalue())
-    doc_stream = DocumentStream(name="document.pdf", stream=batch_stream)
-
-    converter = DocumentConverter()
-    result = converter.convert(
-        source=doc_stream, page_range=page_range, raises_on_error=True
+    parser = LlamaParse(
+        api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
+        result_type="markdown",
+        verbose=False,
+        # optionally partition_pages, etc.
     )
-    return result.document.export_to_markdown()
+
+    # LlamaParse requires a file_name in extra_info when passing bytes
+    file_bytes = file_stream.getvalue()
+    safe_file_name = file_name or "document.pdf"
+
+    docs = await parser.aload_data(
+        file_bytes,
+        extra_info={"file_name": safe_file_name},
+    )
+
+    if not docs:
+        raise Exception("No parsed documents returned")
+
+    parts = [doc.text for doc in docs]
+    return "\n\n".join(parts)
 
 
 # Process PDF
