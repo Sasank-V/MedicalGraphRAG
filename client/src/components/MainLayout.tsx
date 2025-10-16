@@ -132,17 +132,17 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
                             </div>
 
                             {/* New Chat Button */}
-                            <div className="p-4">
+                            <div className="p-4 w-full h-fit">
                                 <button
-                                    className={`group bg-blue-600 hover:bg-blue-700 rounded-lg transition-all duration-200 shadow-sm ${
+                                    className={`group overflow-hidden cursor-pointer h-full w-full bg-blue-600 hover:bg-blue-700 rounded-lg transition-all duration-200 shadow-sm ${
                                         sidebarOpen
-                                            ? "w-full p-3"
+                                            ? "w-full"
                                             : "size-10 mx-auto"
                                     }`}
                                 >
                                     <Link
                                         href="/chat"
-                                        className="flex items-center justify-center gap-2 cursor-pointer"
+                                        className="flex items-center justify-center gap-2 w-full h-full p-3"
                                     >
                                         <Plus className="size-4 text-white" />
                                         {sidebarOpen && (
