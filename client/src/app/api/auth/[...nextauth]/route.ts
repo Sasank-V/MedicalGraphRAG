@@ -1,7 +1,7 @@
 import { IUser } from "@/lib/types";
 import { getUserRepository } from "@/server/repositories";
-import NextAuth from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
+import NextAuth from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
 
 const handler = NextAuth({
   providers: [
@@ -11,14 +11,14 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         const userRepo = getUserRepository();
-        const data : IUser = {
+        const data: IUser = {
           role: "user",
           name: user.name || "",
           email: user.email || "",
-        }
+        };
 
         await userRepo.createUser(data);
 
@@ -28,8 +28,8 @@ const handler = NextAuth({
       } else {
         return false;
       }
-    }
-  }
-})
+    },
+  },
+});
 
-export { handler as GET, handler as POST }
+export { handler as GET, handler as POST };
