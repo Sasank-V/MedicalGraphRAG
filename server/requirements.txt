@@ -1,0 +1,17 @@
+uvicorn
+fastapi
+beanie
+motor
+python-dotenv
+pymupdf
+llama-cloud-services
+pinecone
+neo4j
+langchain
+langchain_neo4j
+langchain_huggingface
+langchain-google-genai
+langchain-mistralai
+langchain_experimental
+google-generativeai
+mistralai
