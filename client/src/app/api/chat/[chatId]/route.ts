@@ -9,7 +9,8 @@ export async function POST(
 ) {
     try {
         const chatId = params.chatId;
-        const { role, content, sourceDocs = null } = await req.json();
+
+        const { role, content, sourceDocs = [] } = await req.json();
         await connectDB();
 
         const chat = await Chat.findById(chatId);
@@ -20,6 +21,9 @@ export async function POST(
             );
 
         const message: any = { role, content, timestamp: new Date() };
+
+        console.log(message, sourceDocs);
+
         if (sourceDocs) message.sourceDocs = sourceDocs;
 
         chat.messages.push(message);
@@ -41,6 +45,7 @@ export async function GET(
 ) {
     try {
         const chatId = params.chatId;
+
         await connectDB();
 
         const chat = await Chat.findById(chatId);

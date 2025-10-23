@@ -8,7 +8,7 @@ export const MessageSchema = new Schema<IMessage>({
     sourceDocs: [
         {
             title: String,
-            snippet: String,
+            pages: String,
             url: String,
         }
     ]
