@@ -3,10 +3,11 @@ fastapi
 beanie
 motor
 python-dotenv
-pymupdf
 llama-cloud-services
 pinecone
+tiktoken=0.7.0
 neo4j
+pymupdf
 langchain
 langchain_neo4j
 langchain_huggingface
@@ -15,3 +16,4 @@ langchain-mistralai
 langchain_experimental
 google-generativeai
 mistralai
+mangum

@@ -20,6 +20,7 @@ from services.graph_db import (
     query_graphdb_with_text,
 )
 from services.llm_models import gemini_model, mistal_model
+from mangum import Mangum
 import json
 
 
@@ -36,6 +37,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+handler = Mangum(app)
 
 # CORS middleware for Next.js communication
 app.add_middleware(
@@ -49,6 +51,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+def root():
+    return {"message": "Welcome to Medical Graph RAG Server"}
 
 
 @app.post("/embed-pdf-stream")
