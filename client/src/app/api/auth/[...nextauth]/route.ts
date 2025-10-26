@@ -15,7 +15,7 @@ const handler = NextAuth({
       if (account?.provider === "google") {
         const userRepo = getUserRepository();
         const data: IUser = {
-          role: "user",
+          role: "admin",
           name: user.name || "",
           email: user.email || "",
         };
@@ -28,6 +28,24 @@ const handler = NextAuth({
       } else {
         return false;
       }
+    },
+    async session({ session }) {
+      if (session?.user?.email) {
+        const userRepo = getUserRepository();
+        const dbUser = await userRepo.getUserByEmail(session.user.email);
+
+        if (dbUser) {
+          session.user.role = dbUser.role || "user";
+          session.user.id = dbUser._id?.toString();
+        }
+      }
+      return session;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.email = user.email;
+      }
+      return token;
     },
   },
 });
