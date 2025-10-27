@@ -11,7 +11,8 @@ import { IMessage } from "@/lib/types";
 import { useChatStore } from "@/stores/chatStore";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Message } from "../../../components/ai-elements/message";
 
 const backendURL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL;
 
@@ -28,6 +29,8 @@ const ChatPage = () => {
   const hasAutoSubmitted = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const referencesRef = useRef<ServerReference[]>([]);
+  const [statusMessages, setStatusMessages] = useState<string[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const {
     messages,
@@ -45,7 +48,7 @@ const ChatPage = () => {
   }, [session, status, router]);
 
   const handleSubmit = useCallback(
-    async (message: string) => {
+    async (message: string, firstMessage: boolean = false) => {
       if (!message.trim()) return;
 
       const userMsg: IMessage = {
@@ -54,8 +57,12 @@ const ChatPage = () => {
         timestamp: new Date(),
         sourceDocs: [],
       };
-      addMessage(userMsg);
-      addMessageToDb(chatId as string, userMsg);
+      const messagesSnapshot = [...useChatStore.getState().messages, userMsg];
+      if (!firstMessage) {
+        // Take a snapshot that includes the new user message to avoid async state lag
+        addMessage(userMsg);
+        addMessageToDb(chatId as string, userMsg);
+      }
 
       // Build payload before adding the empty assistant placeholder
       const payload = {
@@ -63,7 +70,7 @@ const ChatPage = () => {
         top_k: 5,
         model: "gemini",
         user_id: session?.user?.email || "guest_user",
-        previous_messages: useChatStore.getState().messages.map((m) => ({
+        previous_messages: messagesSnapshot.map((m) => ({
           role: m.role,
           content: m.content,
         })),
@@ -78,11 +85,11 @@ const ChatPage = () => {
       addMessage(aiMsg);
 
       try {
-        // cancel any in-flight stream
-        abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
         referencesRef.current = [];
+        setStatusMessages([]);
+        setIsStreaming(true);
 
         const res = await fetch(`${backendURL}/query-stream`, {
           method: "POST",
@@ -116,7 +123,10 @@ const ChatPage = () => {
               if (parsed.event === "token") {
                 updateLastAssistantMessage((prev) => prev + parsed.data);
               } else if (parsed.event === "status") {
-                // ignore in transcript; could render elsewhere if desired
+                // surface status updates in a small panel
+                if (typeof parsed.data === "string") {
+                  setStatusMessages((prev) => [...prev, parsed.data]);
+                }
               } else if (parsed.event === "references") {
                 // save server-provided references to attach at the end
                 if (Array.isArray(parsed.data)) {
@@ -126,37 +136,73 @@ const ChatPage = () => {
                 const finalMsg = useChatStore.getState().messages.at(-1);
                 let content = finalMsg?.content ?? "";
 
-                // Prefer server-provided references when available
+                // Always strip inline [Source: ...] blocks and insert [n] markers
+                const extracted = extractAndNumberSources(content);
+                content = extracted.text;
+
+                // Build source docs: dedupe and order by first appearance in extracted.sources
+                // If server references exist, map them by (url|pages) and project onto extracted order
                 let finalSourceDocs: {
                   title: string;
                   url: string;
                   pages?: string;
                 }[] = [];
-                if (referencesRef.current && referencesRef.current.length) {
-                  finalSourceDocs = referencesRef.current.map((ref, i) => {
-                    let pagesStr: string | undefined;
-                    const pr = ref.page_range;
-                    if (Array.isArray(pr) && pr.length === 2) {
-                      pagesStr = `${pr[0]}-${pr[1]}`;
-                    } else if (typeof pr === "string") {
-                      pagesStr = pr;
+
+                const serverRefs = referencesRef.current || [];
+
+                // Helper to normalize a server page_range to string
+                const normalizePages = (
+                  pr: ServerReference["page_range"]
+                ): string | undefined => {
+                  if (Array.isArray(pr) && pr.length === 2) {
+                    return `${pr[0]}-${pr[1]}`;
+                  }
+                  if (typeof pr === "string") return pr;
+                  return undefined;
+                };
+
+                if (serverRefs.length && extracted.sources?.length) {
+                  const serverMap = new Map<
+                    string,
+                    { url: string; pages?: string }
+                  >();
+                  serverRefs.forEach((ref) => {
+                    const pagesStr = normalizePages(ref.page_range);
+                    const url = ref.file_url || "";
+                    const key = `${url}|${pagesStr || ""}`;
+                    if (!serverMap.has(key)) {
+                      serverMap.set(key, { url: url || "#", pages: pagesStr });
                     }
-                    return {
-                      title: `Reference [${i + 1}]`,
-                      pages: pagesStr,
-                      url: ref.file_url || "#",
-                    };
                   });
-                } else {
-                  const extracted = extractAndNumberSources(content);
-                  content = extracted.text;
-                  finalSourceDocs = (extracted.sources || []).map(
-                    (source: { url: string; pages?: string }, i: number) => ({
-                      title: `Reference [${i + 1}]`,
-                      pages: source.pages,
-                      url: source.url,
-                    })
-                  );
+
+                  finalSourceDocs = extracted.sources.map((src, i) => {
+                    const key = `${src.url}|${src.pages || ""}`;
+                    const match = serverMap.get(key);
+                    const url = match?.url || src.url || "#";
+                    const pages = match?.pages || src.pages;
+                    return { title: `Reference [${i + 1}]`, url, pages };
+                  });
+                } else if (extracted.sources?.length) {
+                  finalSourceDocs = extracted.sources.map((src, i) => ({
+                    title: `Reference [${i + 1}]`,
+                    url: src.url || "#",
+                    pages: src.pages,
+                  }));
+                } else if (serverRefs.length) {
+                  // No inline source blocks, but server provided references: dedupe and list
+                  const seen = new Set<string>();
+                  const unique = serverRefs.filter((ref) => {
+                    const pagesStr = normalizePages(ref.page_range) || "";
+                    const key = `${ref.file_url || ""}|${pagesStr}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                  });
+                  finalSourceDocs = unique.map((ref, i) => ({
+                    title: `Reference [${i + 1}]`,
+                    url: ref.file_url || "#",
+                    pages: normalizePages(ref.page_range),
+                  }));
                 }
 
                 updateLastAssistantMessage(content, finalSourceDocs);
@@ -174,6 +220,8 @@ const ChatPage = () => {
         }
       } catch (err) {
         console.error("Error in handleSubmit:", err);
+      } finally {
+        setIsStreaming(false);
       }
     },
     [chatId, session?.user?.email, addMessage, updateLastAssistantMessage]
@@ -205,6 +253,12 @@ const ChatPage = () => {
     }
   }, [autoSubmitQuery, messages, chatId, router, handleSubmit]);
 
+  useEffect(() => {
+    if (messages.length == 1) {
+      handleSubmit(messages[0].content, true);
+    }
+  });
+
   // Abort in-flight stream on unmount
   useEffect(() => {
     return () => {
@@ -215,7 +269,11 @@ const ChatPage = () => {
   return (
     <div className="flex justify-center items-center w-full h-full flex-col pb-20 relative">
       <div className="w-full flex justify-center">
-        <ConversationComponent messages={messages} />
+        <ConversationComponent
+          messages={messages}
+          statusMessages={statusMessages}
+          isStreaming={isStreaming}
+        />
       </div>
       <ChatInput
         handleEnter={(msg) => {
