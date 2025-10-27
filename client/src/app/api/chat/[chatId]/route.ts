@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/server/db/mongoose";
 import { Chat } from "@/server/models";
 import { IMessage } from "@/lib/types";
+import { DynamoDBChatRepository } from "@/server/repositories/DynamoDbChatRepository";
 
 export async function POST(
   req: Request,
@@ -11,6 +12,22 @@ export async function POST(
     const { chatId } = await params;
 
     const { role, content, sourceDocs = [] } = await req.json();
+    const provider = (
+      process.env.DB_PROVIDER ||
+      process.env.DATABASE_PROVIDER ||
+      "mongodb"
+    ).toLowerCase();
+    if (provider === "dynamodb") {
+      const chatRepo = new DynamoDBChatRepository();
+      const message: IMessage = { role, content, timestamp: new Date() };
+      if (sourceDocs)
+        (message as IMessage & { sourceDocs: typeof sourceDocs }).sourceDocs =
+          sourceDocs;
+      const saved = await chatRepo.appendMessage(chatId, message);
+      return NextResponse.json(saved);
+    }
+
+    // MongoDB default
     await connectDB();
 
     const chat = await Chat.findById(chatId);
@@ -18,10 +35,9 @@ export async function POST(
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
 
     const message: IMessage = { role, content, timestamp: new Date() };
-
-    console.log(message, sourceDocs);
-
-    if (sourceDocs) (message as IMessage & { sourceDocs: typeof sourceDocs }).sourceDocs = sourceDocs;
+    if (sourceDocs)
+      (message as IMessage & { sourceDocs: typeof sourceDocs }).sourceDocs =
+        sourceDocs;
 
     chat.messages.push(message);
     chat.lastUpdated = new Date();
@@ -42,6 +58,18 @@ export async function GET(
 ) {
   try {
     const { chatId } = await params;
+    const provider = (
+      process.env.DB_PROVIDER ||
+      process.env.DATABASE_PROVIDER ||
+      "mongodb"
+    ).toLowerCase();
+    if (provider === "dynamodb") {
+      const chatRepo = new DynamoDBChatRepository();
+      const messages = await chatRepo.getMessages(chatId);
+      if (!messages)
+        return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      return NextResponse.json({ messages });
+    }
 
     await connectDB();
 
