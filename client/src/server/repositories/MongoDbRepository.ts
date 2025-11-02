@@ -11,7 +11,7 @@ export class MongoDBUserRepository implements UserRepository {
 
     const userFound = await User.find({ email: data.email });
 
-    console.log(userFound);
+    // console.log(userFound);
 
     if (userFound.length === 0) {
       await User.create(data);

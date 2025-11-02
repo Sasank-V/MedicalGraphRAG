@@ -1,7 +1,7 @@
 "use client";
 
 import { IMessage } from "@/lib/types";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Loader2 } from "lucide-react";
 
@@ -19,11 +19,14 @@ const ConversationComponent = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [hoveredMsg, setHoveredMsg] = useState<number>(-1);
   const [openRefs, setOpenRefs] = useState<{ [key: number]: boolean }>({});
+  const [openRefText, setOpenRefText] = useState<{ [key: string]: boolean }>(
+    {}
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, statusMessages, isStreaming]);
-
+  // console.log(messages);
   const toggleReferences = (idx: number) => {
     setOpenRefs((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
@@ -78,7 +81,6 @@ const ConversationComponent = ({
                   </div>
                 )}
               </div>
-
               {(message.sourceDocs || []).length > 0 && (
                 <div className="mt-1">
                   <button
@@ -89,36 +91,81 @@ const ConversationComponent = ({
                   </button>
 
                   {openRefs[i] && (
-                    <div className="flex flex-col gap-1 mt-1">
+                    <div className="flex flex-col gap-2 mt-1">
                       {message.sourceDocs?.map((ref, idx) => {
                         const indexLabel = `[${idx + 1}]`;
-                        let fileName = ref.title || "Source";
-                        try {
-                          const last =
-                            decodeURI(ref.url).split("/").pop() || ref.url;
-                          fileName = last.split("?")[0] || fileName;
-                        } catch {}
+                        const hasUrl = ref.url && ref.url !== "#";
+                        let displayTitle = ref.title || "Source";
+                        if (hasUrl) {
+                          try {
+                            const last =
+                              decodeURI(ref.url).split("/").pop() || ref.url;
+                            const name = (last as string).split("?")[0];
+                            if (name) displayTitle = name;
+                          } catch {}
+                        }
+                        const key = `${i}-${idx}`;
+                        const isOpen = !!openRefText[key];
                         return (
                           <div
                             key={idx}
-                            className="text-xs text-gray-700 flex flex-wrap items-center gap-2"
+                            className="text-xs text-gray-700 border rounded-md p-2"
                           >
-                            <span className="font-semibold text-gray-800">
-                              {indexLabel}
-                            </span>
-                            <a
-                              href={ref.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline hover:text-blue-800 truncate max-w-full"
-                              title={ref.url}
-                            >
-                              {fileName}
-                            </a>
-                            {ref.pages && (
-                              <span className="text-gray-600">
-                                • Pages {ref.pages}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-gray-800">
+                                {indexLabel}
                               </span>
+                              {hasUrl ? (
+                                <a
+                                  href={ref.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 underline hover:text-blue-800 truncate max-w-full"
+                                  title={ref.url}
+                                >
+                                  {displayTitle}
+                                </a>
+                              ) : (
+                                <span className="text-gray-900 font-medium">
+                                  {displayTitle}
+                                </span>
+                              )}
+                              {ref.pages && (
+                                <span className="text-gray-600">
+                                  • Pages {ref.pages}
+                                </span>
+                              )}
+                              {ref.source && (
+                                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border">
+                                  {ref.source === "graph_db"
+                                    ? "Graph"
+                                    : ref.source === "vector_db"
+                                    ? "Vector"
+                                    : ref.source}
+                                </span>
+                              )}
+                            </div>
+                            {(ref.text || ref.excerpt) && (
+                              <div className="mt-1">
+                                <button
+                                  className="text-[11px] text-gray-700 underline hover:text-gray-900"
+                                  onClick={() =>
+                                    setOpenRefText((prev) => ({
+                                      ...prev,
+                                      [key]: !prev[key],
+                                    }))
+                                  }
+                                >
+                                  {isOpen ? "Hide text ▲" : "Show text ▼"}
+                                </button>
+                                {isOpen && (
+                                  <div className="mt-1 max-h-48 overflow-auto rounded bg-gray-50 p-2 border text-[11px] leading-snug whitespace-pre-wrap">
+                                    <ReactMarkdown>
+                                      {ref.text || ref.excerpt}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         );

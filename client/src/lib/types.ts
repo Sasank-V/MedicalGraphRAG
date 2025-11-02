@@ -8,6 +8,12 @@ export interface IMessage {
     title: string;
     pages?: string;
     url: string;
+    // Optional short excerpt/snippet to show alongside the reference
+    excerpt?: string;
+    // Where the reference came from, e.g., 'vector_db' | 'graph_db'
+    source?: string;
+    // Full reference text (untrimmed) to show in dropdown on demand
+    text?: string;
   }[];
 }
 

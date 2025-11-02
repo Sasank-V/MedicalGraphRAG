@@ -9,7 +9,14 @@ interface ChatState {
   setLoading: (loading: boolean) => void;
   updateLastAssistantMessage: (
     updater: string | ((prev: string) => string),
-    sourceDocs?: { title: string; url: string; pages?: string }[]
+    sourceDocs?: {
+      title: string;
+      url: string;
+      pages?: string;
+      excerpt?: string;
+      source?: string;
+      text?: string;
+    }[]
   ) => void;
 }
 
