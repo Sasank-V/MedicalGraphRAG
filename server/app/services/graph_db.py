@@ -45,13 +45,106 @@ def init_graph_db():
 
 
 async def query_graphdb_with_text(text: str):
+    """Query Neo4j via GraphCypherQAChain and enrich the result with cypher, raw records, and lightweight references.
+
+    Returns a dict:
+      {
+        'query': str,                 # the user query
+        'cypher': str | None,         # generated cypher if available
+        'result': str,                # LLM answer
+        'records': list[dict],        # raw rows from executing the cypher (best-effort)
+        'references': list[dict],     # extracted refs with file metadata when present
+      }
+    """
     if not graph_db:
         return {"error": "Neo4j not connected"}
 
     chain = GraphCypherQAChain.from_llm(
         graph=graph_db, llm=mistal_model, verbose=True, allow_dangerous_requests=True
     )
-    return chain.invoke({"query": text})
+
+    output = chain.invoke({"query": text})
+
+    # Attempt to extract generated cypher from intermediate steps
+    cypher_query = None
+    try:
+        steps = output.get("intermediate_steps") or []
+        if isinstance(steps, list) and steps:
+            # Common shapes: {'query': 'MATCH ...'} or {'cypher': '...'}
+            last = steps[-1]
+            cypher_query = (last.get("query") if isinstance(last, dict) else None) or (
+                last.get("cypher") if isinstance(last, dict) else None
+            )
+    except Exception:
+        cypher_query = None
+
+    # Execute cypher to obtain structured records (best-effort)
+    records = []
+    if cypher_query:
+        try:
+            records = graph_db.query(cypher_query) or []
+        except Exception as e:
+            logger.info(f"Failed to execute generated cypher: {e}")
+            records = []
+
+    # Extract lightweight references with metadata if available in returned rows
+    def _as_props(val):
+        try:
+            # Neo4j Node/Relationship objects often carry _properties
+            props = getattr(val, "_properties", None)
+            if props and isinstance(props, dict):
+                return props
+            # If already a dict (e.g., projected node maps)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+        return None
+
+    refs = []
+    seen = set()
+    for row in records:
+        try:
+            if not isinstance(row, dict):
+                continue
+            for v in row.values():
+                props = _as_props(v)
+                if not props:
+                    continue
+                file_url = props.get("file_url")
+                file_name = props.get("file_name")
+                file_id = props.get("file_id")
+                page_range = props.get("page_range")
+                chunk_id = props.get("chunk_id")
+
+                # Dedupe on (file_url, page_range)
+                key = f"{file_url}|{page_range}"
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                refs.append(
+                    {
+                        "file_id": file_id,
+                        "file_name": file_name,
+                        "file_url": file_url,
+                        "page_range": page_range,
+                        "chunk_id": chunk_id,
+                        "score": None,
+                        "source": "graph_db",
+                        # No direct chunk text from graph rows; client will show the LLM result or omit
+                    }
+                )
+        except Exception:
+            continue
+
+    return {
+        "query": text,
+        "cypher": cypher_query,
+        "result": output.get("result") if isinstance(output, dict) else str(output),
+        "records": records,
+        "references": refs,
+    }
 
 
 GEMINI_RATE_LIMIT_PER_MINUTE = 15
