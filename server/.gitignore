@@ -1,1 +1,25 @@
-rag-env
+# Virtual environment
+rag-env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database files
+database/
+
+# Environment variables
+.env
+
+# VSCode settings
+.vscode/
+
+# Logs
+*.log
+
+# MacOS files
+.DS_Store
+
+# Pycharm files
+.idea/
