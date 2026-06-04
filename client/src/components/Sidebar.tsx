@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
 
 const mockChats = [
     {
@@ -126,14 +127,14 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                                             : "size-10 mx-auto"
                                     }`}
                                 >
-                                    <div className="flex items-center justify-center gap-2">
+                                    <Link href="/" className="flex items-center justify-center gap-2 cursor-pointer">
                                         <Plus className="size-4 text-white" />
                                         {sidebarOpen && (
                                             <span className="font-medium text-white text-sm">
                                                 New Chat
                                             </span>
                                         )}
-                                    </div>
+                                    </Link>
                                 </button>
                             </div>
 
@@ -280,7 +281,9 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                             </div>
                         )}
                     </header>
-                    <div className="flex-1">{children}</div>
+                    <div className="w-full h-full justify-center items-center flex">
+                        {children}
+                    </div>
 
                     {/* Footer */}
                     {/* <footer className="px-6 py-6 border-t border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
