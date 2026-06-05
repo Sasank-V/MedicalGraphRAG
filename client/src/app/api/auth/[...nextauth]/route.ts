@@ -15,11 +15,14 @@ const handler = NextAuth({
       if (account?.provider === "google") {
         const userRepo = getUserRepository();
         const data : IUser = {
+          role: "user",
           name: user.name || "",
           email: user.email || "",
         }
 
         await userRepo.createUser(data);
+
+        console.log("Created user in DB: ", data);
 
         return true;
       } else {
