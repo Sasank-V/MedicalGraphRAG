@@ -1,16 +1,16 @@
 import fitz
 import asyncio
 from datetime import datetime
-from app.services.data_processing import (
+from services.data_processing import (
     get_file_bytes_stream,
     get_page_batches,
     get_batch_stream,
 )
-from app.core.logger import get_logger
-from app.models.worker_db import WorkerDB
-from app.models.db_models import update_job_status, QueueJob, JobStatus
-from app.workers.queue import markdown_queue
-from app.workers.markdown_worker import extract_markdown_and_embed
+from core.logger import get_logger
+from models.worker_db import WorkerDB
+from models.db_models import update_job_status, QueueJob, JobStatus
+from workers.queue import markdown_queue
+from workers.markdown_worker import process_markdown_batch
 
 
 logger = get_logger()
@@ -55,18 +55,18 @@ async def pdf_download_and_batch_async(
             markdown_job = QueueJob(
                 user_id=user_id,
                 status=JobStatus.QUEUED,
-                action="markdown_converion_and_embed",
+                action="markdown_conversion",
                 parent_job_id=job_id,
                 file_id=file_id,
                 file_metadata=file_metadata,
                 page_range=page_range,
             )
             await markdown_job.insert()
-            child_job_ids.append(markdown_job.id)
+            child_job_ids.append(str(markdown_job.id))
 
             # Enqueue markdown job with batch stream
             markdown_queue.enqueue(
-                extract_markdown_and_embed,
+                process_markdown_batch,
                 job_id=str(markdown_job.id),
                 file_stream=batch_stream,
                 page_range=page_range,

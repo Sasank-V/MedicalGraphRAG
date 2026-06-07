@@ -1,0 +1,65 @@
+# VCS
+.git/
+.gitignore
+
+# Python caches and artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+.build/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+rag-env/
+
+# Tests (exclude from runtime image)
+tests/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS/filesystem noise
+.DS_Store
+Thumbs.db
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.cache/
+
+# Coverage/reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Logs/temp
+*.log
+logs/
+tmp/
+*.tmp
+*.swp
+*.swo
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Node (if any)
+node_modules/
+
+# Env files (pass via env vars or compose instead)
+.env
+*.env
+
+# Compose files (not needed in image)
+docker-compose.yml
+docker-compose.*.yml
