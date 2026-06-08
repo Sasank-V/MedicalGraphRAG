@@ -1,10 +1,27 @@
 "use client";
 
+import { createNewChat } from "@/lib/apiUtils";
 import ChatInput from "./ChatInput";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
+import { useUserDetailsStore } from "@/stores/userDetailsStore";
 
 const NewChatPage = () => {
+    const {data: session} = useSession();
 
-    const handleCreateNewPage = async () => {
+    const {addChat} = useUserDetailsStore();
+
+    const handleCreateNewPage = async (input: string) => {
+        const email = session?.user?.email;
+        if (!email) return;
+
+        const new_chat = await createNewChat(email, input, input);
+
+        if (!new_chat) return;
+
+        addChat(new_chat)
+        redirect(`/chat/${new_chat._id}`)
+
         return;
     }
 
