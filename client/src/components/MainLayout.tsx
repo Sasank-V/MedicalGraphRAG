@@ -14,9 +14,10 @@ import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
-import { IChat } from "@/lib/types";
+import { IChat, IUser } from "@/lib/types";
 import { redirect, usePathname } from "next/navigation";
 import { useUserDetailsStore } from "@/stores/userDetailsStore";
+import { getUserFromDb } from "@/lib/apiUtils";
 
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
     const { data: session, status } = useSession();
@@ -25,7 +26,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     
-    const {chats, setChats, activeChat, setActiveChat} = useUserDetailsStore();
+    const {chats, setChats, activeChat, setActiveChat, setIsAdmin} = useUserDetailsStore();
 
 
     const loadChat = (chatId: string) => {
@@ -35,25 +36,22 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         const getChats = async () => {
-            try {
-                const res = await fetch(
-                    `/api/chat?email=${session?.user?.email}`,
-                );
+            if (!session?.user?.email) return;
 
-                const { chats } = await res.json();
+            const user = await getUserFromDb(session?.user?.email) as IUser;
 
-                const sortedChats = chats.sort(
-                    (a: IChat, b: IChat) =>
-                        new Date(b.lastUpdated!).getTime() -
-                        new Date(a.lastUpdated!).getTime()
-                );
+            if (!user) return;
 
-                setChats(sortedChats);
-                console.log(sortedChats);
-            } catch (err: any) {
-                console.log(err);
+            console.log(user.role === "admin");
+
+            setIsAdmin(user.role === "admin");
+
+            if (!user.chats) {
                 setChats([]);
+                return;
             }
+
+            setChats(user.chats);
         };
 
         getChats();
@@ -143,7 +141,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
                                     }`}
                                 >
                                     <Link
-                                        href="/"
+                                        href="/chat"
                                         className="flex items-center justify-center gap-2 cursor-pointer"
                                     >
                                         <Plus className="size-4 text-white" />
