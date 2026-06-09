@@ -20,7 +20,7 @@ const LandingPage = () => {
                 </p>
                 <div className="mt-8 flex gap-4">
                     <Link
-                        href="/app"
+                        href="/chat"
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2"
                     >
                         Start Chatting <ArrowRight className="w-4 h-4" />

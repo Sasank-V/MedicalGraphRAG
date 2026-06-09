@@ -25,6 +25,7 @@ const ChatPage = () => {
         const newMessage: IMessage = {
             role: "user",
             content: message,
+            timestamp: new Date()
         };
 
         addMessageToDb(chatId as string, newMessage);
@@ -46,7 +47,7 @@ const ChatPage = () => {
 
     return (
         <div className="flex justify-center items-center w-full h-full flex-col pb-20 relative">
-            <div className="flex-1 flex h-full justify-center overflow-scroll w-full">
+            <div className="flex-1 flex h-full justify-center max-h-[calc(100vh-170px)] overflow-scroll w-full">
                 <ConversationComponent messages={messages} />
             </div>
             <ChatInput
