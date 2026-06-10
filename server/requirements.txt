@@ -2,11 +2,9 @@ uvicorn
 fastapi
 beanie
 motor
-redis
-rq
 python-dotenv
 pymupdf
-docling
+llama-cloud-services
 pinecone
 neo4j
 langchain
@@ -17,4 +15,3 @@ langchain-mistralai
 langchain_experimental
 google-generativeai
 mistralai
-sentence-transformers

@@ -10,7 +10,7 @@ from models.api_models import EmbedRequest, QueryRequest
 from services.data_processing import (
     get_file_bytes_stream,
     get_page_batches,
-    convert_pdf_to_markdown,
+    convert_pdf_to_markdown_async,
 )
 from services.vector_db import insert_text_chunk, query_vector_store, init_vector_db
 from services.graph_db import (
@@ -109,7 +109,9 @@ async def embed_pdf_stream(payload: EmbedRequest):
                 yield f"data: {json.dumps({'status': 'converting_batch', 'message': f'Converting pages {page_range[0]}-{page_range[1]} to markdown', 'batch': batch_num, 'total_batches': total_batches, 'page_range': page_range})}\n\n"
                 await asyncio.sleep(0)
 
-                markdown_text = convert_pdf_to_markdown(file_stream, page_range)
+                markdown_text = await convert_pdf_to_markdown_async(
+                    file_stream, page_range, file_name=payload.file_name
+                )
 
                 yield f"data: {json.dumps({'status': 'batch_converted', 'message': f'Converted {len(markdown_text)} characters', 'batch': batch_num})}\n\n"
                 await asyncio.sleep(0)
