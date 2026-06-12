@@ -6,7 +6,7 @@ export interface IMessage {
   timestamp?: Date;
   sourceDocs?: {
     title: string;
-    snippet: string;
+    pages?: string;
     url: string;
   }[];
 }
