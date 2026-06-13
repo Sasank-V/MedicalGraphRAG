@@ -1,7 +1,6 @@
 "use client";
 
 import { useUserDetailsStore } from "@/stores/userDetailsStore";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
@@ -14,7 +13,7 @@ interface UploadedFile {
 
 export default function AdminUploadPage() {
     const router = useRouter();
-    const {isAdmin} = useUserDetailsStore();
+    const { isAdmin } = useUserDetailsStore();
 
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);

@@ -24,7 +24,6 @@ import json
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
     init_vector_db()
     init_graph_db()
     yield
