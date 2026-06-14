@@ -1,5 +1,6 @@
 import asyncio
 import fitz
+import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
+        os.getenv("CLIENT_URL"),
     ],  # Add your Next.js URL
     allow_credentials=True,
     allow_methods=["*"],
