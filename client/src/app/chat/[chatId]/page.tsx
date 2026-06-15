@@ -13,6 +13,8 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+const backendURL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL;
+
 const ChatPage = () => {
   const { chatId } = useParams();
   const { data: session, status } = useSession();
@@ -63,7 +65,7 @@ const ChatPage = () => {
     };
 
     try {
-      const res = await fetch("http://localhost:8000/query-stream", {
+      const res = await fetch(`${backendURL}/query-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
