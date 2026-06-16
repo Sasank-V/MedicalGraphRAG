@@ -20,6 +20,7 @@ export interface IChat {
 }
 
 export interface IUser {
+  _id?: string;
   role?: "user" | "admin";
   email: string;
   name?: string;
