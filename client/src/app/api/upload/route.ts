@@ -8,10 +8,10 @@ import {
 } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
-  region: process.env.AWS_S3_REGION || "",
+  region: process.env.APP_AWS_S3_REGION || "",
   credentials: {
-    accessKeyId: process.env.AWS_S3_ACCESS_KEY || "",
-    secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
+    accessKeyId: process.env.APP_AWS_S3_ACCESS_KEY || "",
+    secretAccessKey: process.env.APP_AWS_S3_SECRET_ACCESS_KEY || "",
   },
 });
 
@@ -24,8 +24,8 @@ function buildS3ObjectUrl(bucket: string, region: string, key: string): string {
 }
 
 async function uploadFileToS3(fileBuffer: Buffer, originalName: string) {
-  const bucket = process.env.AWS_S3_BUCKET_NAME || "";
-  const region = process.env.AWS_S3_REGION || "";
+  const bucket = process.env.APP_AWS_S3_BUCKET_NAME || "";
+  const region = process.env.APP_AWS_S3_REGION || "";
   if (!bucket || !region) {
     throw new Error("Missing AWS_S3_BUCKET_NAME or AWS_S3_REGION env var");
   }
@@ -39,7 +39,7 @@ async function uploadFileToS3(fileBuffer: Buffer, originalName: string) {
     Key: key,
     Body: fileBuffer,
     ContentType: "application/pdf",
-    ...(process.env.AWS_S3_PUBLIC_ACL === "true"
+    ...(process.env.APP_AWS_S3_PUBLIC_ACL === "true"
       ? { ACL: "public-read" as const }
       : {}),
   };
@@ -81,11 +81,13 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const bucket = process.env.AWS_S3_BUCKET_NAME || "";
-    const region = process.env.AWS_S3_REGION || "";
+    const bucket = process.env.APP_AWS_S3_BUCKET_NAME || "";
+    const region = process.env.APP_AWS_S3_REGION || "";
     if (!bucket || !region) {
       return NextResponse.json(
-        { error: "Missing AWS_S3_BUCKET_NAME or AWS_S3_REGION env var" },
+        {
+          error: "Missing APP_AWS_S3_BUCKET_NAME or APP_AWS_S3_REGION env var",
+        },
         { status: 500 }
       );
     }

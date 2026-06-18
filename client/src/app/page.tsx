@@ -1,4 +1,5 @@
-import React from "react";
+"use client";
+import React, { useEffect } from "react";
 import {
   ArrowRight,
   CheckCircle,
@@ -7,8 +8,20 @@ import {
   Zap,
   Star,
 } from "lucide-react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function LandingPage() {
+  const { status } = useSession();
+  const router = useRouter();
+
+  // Redirect authenticated users to chat
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/chat");
+    }
+  }, [status, router]);
   const features = [
     {
       icon: Brain,
@@ -65,11 +78,20 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">M</span>
+              <Image
+                src={"/logo.svg"}
+                height={16}
+                width={16}
+                alt="logo"
+                className="size-4"
+              />
             </div>
             <span className="text-xl font-semibold text-gray-900">MedGPT</span>
           </div>
-          <button className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          <button
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            onClick={() => signIn("google")}
+          >
             Sign In
           </button>
         </div>
@@ -95,7 +117,10 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-            <button className="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2">
+            <button
+              className="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+              onClick={() => signIn("google")}
+            >
               Start Free Trial
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -204,7 +229,7 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <p className="text-gray-700 mb-6 leading-relaxed">
-                  "{testimonial.quote}"
+                  &ldquo;{testimonial.quote}&rdquo;
                 </p>
                 <div>
                   <div className="font-semibold text-gray-900">
@@ -231,7 +256,10 @@ export default function LandingPage() {
               Join thousands of healthcare professionals using MedGPT to deliver
               better patient care.
             </p>
-            <button className="px-8 py-4 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-2">
+            <button
+              className="px-8 py-4 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-2"
+              onClick={() => signIn("google")}
+            >
               Start Your Free Trial
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -247,8 +275,14 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xs">M</span>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Image
+                  src={"/logo.svg"}
+                  height={16}
+                  width={16}
+                  alt="logo"
+                  className="size-4"
+                />
               </div>
               <span className="text-gray-600 text-sm">
                 © 2024 MedGPT. All rights reserved.
