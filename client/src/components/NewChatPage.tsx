@@ -21,10 +21,7 @@ const NewChatPage = () => {
     if (!new_chat) return;
 
     addChat(new_chat);
-    // Pass the initial query as a URL parameter so the chat page can auto-submit it
-    router.push(
-      `/chat/${new_chat._id}?autoSubmit=${encodeURIComponent(input)}`
-    );
+    router.push(`/chat/${new_chat._id}`);
 
     return;
   };

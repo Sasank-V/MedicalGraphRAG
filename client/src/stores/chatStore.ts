@@ -22,15 +22,23 @@ export const useChatStore = create<ChatState>((set) => ({
   updateLastAssistantMessage: (updater, sourceDocs) =>
     set((state) => {
       const updated = [...state.messages];
-      const last = updated[updated.length - 1];
-      if (last && last.role === "assistant") {
+      // Find the most recent assistant message to update
+      let idx = -1;
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === "assistant") {
+          idx = i;
+          break;
+        }
+      }
+      if (idx !== -1) {
+        const target = updated[idx];
         if (typeof updater === "function") {
-          last.content = updater(last.content);
+          target.content = updater(target.content);
         } else {
-          last.content = updater;
+          target.content = updater;
         }
         if (sourceDocs) {
-          (last as IMessage & { sourceDocs?: typeof sourceDocs }).sourceDocs =
+          (target as IMessage & { sourceDocs?: typeof sourceDocs }).sourceDocs =
             sourceDocs;
         }
       }
