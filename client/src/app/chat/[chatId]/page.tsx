@@ -17,8 +17,14 @@ import { Message } from "../../../components/ai-elements/message";
 const backendURL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL;
 
 type ServerReference = {
-  file_url?: string;
+  file_id?: string | null;
+  file_name?: string | null;
+  file_url?: string | null;
   page_range?: [number, number] | [string, string] | string | null;
+  chunk_id?: number | null;
+  score?: number | null;
+  text?: string | null;
+  source?: string | null; // 'vector_db' | 'graph_db'
 };
 
 const ChatPage = () => {
@@ -146,6 +152,9 @@ const ChatPage = () => {
                   title: string;
                   url: string;
                   pages?: string;
+                  excerpt?: string;
+                  source?: string;
+                  text?: string;
                 }[] = [];
 
                 const serverRefs = referencesRef.current || [];
@@ -161,27 +170,83 @@ const ChatPage = () => {
                   return undefined;
                 };
 
+                const trimExcerpt = (t?: string | null) => {
+                  const str = (t || "").trim();
+                  if (!str) return undefined;
+                  // limit to ~220 chars for display
+                  return str.length > 220 ? `${str.slice(0, 220)}…` : str;
+                };
+
                 if (serverRefs.length && extracted.sources?.length) {
                   const serverMap = new Map<
                     string,
-                    { url: string; pages?: string }
+                    {
+                      url: string;
+                      pages?: string;
+                      excerpt?: string;
+                      source?: string;
+                      title?: string;
+                      text?: string;
+                    }
                   >();
                   serverRefs.forEach((ref) => {
                     const pagesStr = normalizePages(ref.page_range);
                     const url = ref.file_url || "";
                     const key = `${url}|${pagesStr || ""}`;
                     if (!serverMap.has(key)) {
-                      serverMap.set(key, { url: url || "#", pages: pagesStr });
+                      serverMap.set(key, {
+                        url: url || "#",
+                        pages: pagesStr,
+                        excerpt: trimExcerpt(ref.text),
+                        source: ref.source || undefined,
+                        title: ref.file_name || undefined,
+                        text: ref.text || undefined,
+                      });
                     }
                   });
 
-                  finalSourceDocs = extracted.sources.map((src, i) => {
+                  const mappedDocs = extracted.sources.map((src, i) => {
                     const key = `${src.url}|${src.pages || ""}`;
-                    const match = serverMap.get(key);
+                    let match = serverMap.get(key);
+
+                    // Fallback: if key match fails, try positional mapping
+                    if (!match) {
+                      const fb = serverRefs[i];
+                      if (fb && fb.file_url) {
+                        match = {
+                          url: (fb.file_url as string) || "#",
+                          pages: normalizePages(fb.page_range),
+                          excerpt: trimExcerpt(fb.text),
+                          source: fb.source || undefined,
+                          title: fb.file_name || undefined,
+                          text: fb.text || undefined,
+                        };
+                      }
+                    }
+
                     const url = match?.url || src.url || "#";
                     const pages = match?.pages || src.pages;
-                    return { title: `Reference [${i + 1}]`, url, pages };
+                    const excerpt = match?.excerpt;
+                    const source = match?.source;
+                    const title = match?.title || `Reference [${i + 1}]`;
+                    const text = match?.text;
+                    return { title, url, pages, excerpt, source, text };
                   });
+
+                  // Append any graph-only references (no URL) that weren't matched via inline sources
+                  const graphOnly = serverRefs.filter(
+                    (r) => r.source === "graph_db" || !r.file_url
+                  );
+                  const graphDocs = graphOnly.map((ref) => ({
+                    title: ref.file_name || "Graph Database",
+                    url: ref.file_url || "#",
+                    pages: normalizePages(ref.page_range),
+                    excerpt: trimExcerpt(ref.text),
+                    source: ref.source || "graph_db",
+                    text: ref.text || undefined,
+                  }));
+
+                  finalSourceDocs = [...mappedDocs, ...graphDocs];
                 } else if (extracted.sources?.length) {
                   finalSourceDocs = extracted.sources.map((src, i) => ({
                     title: `Reference [${i + 1}]`,
@@ -199,9 +264,16 @@ const ChatPage = () => {
                     return true;
                   });
                   finalSourceDocs = unique.map((ref, i) => ({
-                    title: `Reference [${i + 1}]`,
+                    title:
+                      (ref.source === "graph_db" &&
+                        (ref.file_name || "Graph Database")) ||
+                      ref.file_name ||
+                      `Reference [${i + 1}]`,
                     url: ref.file_url || "#",
                     pages: normalizePages(ref.page_range),
+                    excerpt: trimExcerpt(ref.text),
+                    source: ref.source || undefined,
+                    text: ref.text || undefined,
                   }));
                 }
 

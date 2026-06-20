@@ -22,7 +22,7 @@ const handler = NextAuth({
 
         await userRepo.createUser(data);
 
-        console.log("Created user in DB: ", data);
+        // console.log("Created user in DB: ", data);
 
         return true;
       } else {
