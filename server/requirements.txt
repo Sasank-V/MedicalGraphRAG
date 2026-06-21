@@ -17,3 +17,4 @@ langchain_experimental
 google-generativeai
 mistralai
 mangum
+boto3

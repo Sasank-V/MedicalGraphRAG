@@ -200,8 +200,10 @@ async def query_stream(payload: QueryRequest):
             await asyncio.sleep(0)
 
             graph_context = ""
+            graph_answer = ""
             try:
                 graph_result = await query_graphdb_with_text(payload.query)
+                print("Graph", graph_result)
                 if graph_result and not graph_result.get("error"):
                     # Extract the result from GraphDB
                     graph_answer = graph_result.get("result", "")
@@ -215,6 +217,7 @@ async def query_stream(payload: QueryRequest):
             except Exception as e:
                 yield f"data: {json.dumps({'event': 'status', 'data': f'Graph DB search skipped: {str(e)}'})}\n\n"
                 graph_context = ""
+                graph_answer = ""
 
             await asyncio.sleep(0)
 
@@ -262,6 +265,7 @@ async def query_stream(payload: QueryRequest):
                         "file_id": file_id,
                         "file_name": file_name,
                         "file_url": file_url,
+                        "text": text,
                         "page_range": page_tuple,
                         "chunk_id": chunk_id,
                         "score": score,
@@ -272,6 +276,54 @@ async def query_stream(payload: QueryRequest):
                     vector_contexts.append(text)
 
             # Checkpoint 5: Send references
+            # Merge in graph DB references (with metadata) when available; fallback to a single graph entry with text
+            try:
+                graph_refs = []
+                if isinstance(graph_result, dict):
+                    graph_refs = graph_result.get("references") or []
+                if graph_refs:
+                    for gr in graph_refs:
+                        # Ensure mandatory fields and attach text if missing
+                        merged = {
+                            "file_id": gr.get("file_id"),
+                            "file_name": gr.get("file_name") or "Graph Database",
+                            "file_url": gr.get("file_url"),
+                            "page_range": gr.get("page_range"),
+                            "chunk_id": gr.get("chunk_id"),
+                            "score": gr.get("score"),
+                            "source": gr.get("source") or "graph_db",
+                            "text": gr.get("text") or graph_answer or "",
+                        }
+                        references.append(merged)
+                elif graph_answer:
+                    references.append(
+                        {
+                            "file_id": None,
+                            "file_name": "Graph Database",
+                            "file_url": None,
+                            "text": graph_answer,
+                            "page_range": None,
+                            "chunk_id": None,
+                            "score": None,
+                            "source": "graph_db",
+                        }
+                    )
+            except Exception:
+                # In case of unexpected structure, keep at least a single graph text reference
+                if graph_answer:
+                    references.append(
+                        {
+                            "file_id": None,
+                            "file_name": "Graph Database",
+                            "file_url": None,
+                            "text": graph_answer,
+                            "page_range": None,
+                            "chunk_id": None,
+                            "score": None,
+                            "source": "graph_db",
+                        }
+                    )
+
             yield f"data: {json.dumps({'event': 'references', 'data': references})}\n\n"
             await asyncio.sleep(0)
 
