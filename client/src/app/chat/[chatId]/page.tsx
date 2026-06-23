@@ -12,7 +12,7 @@ import { useChatStore } from "@/stores/chatStore";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useCallback, useState } from "react";
-import { Message } from "../../../components/ai-elements/message";
+// Removed unused Message import
 
 const backendURL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL;
 
@@ -33,8 +33,8 @@ const ChatPage = () => {
   const searchParams = useSearchParams();
   const autoSubmitQuery = searchParams.get("autoSubmit");
   const hasAutoSubmitted = useRef(false);
-  const abortRef = useRef<AbortController | null>(null);
   const referencesRef = useRef<ServerReference[]>([]);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
   const [statusMessages, setStatusMessages] = useState<string[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -91,208 +91,182 @@ const ChatPage = () => {
       addMessage(aiMsg);
 
       try {
-        const controller = new AbortController();
-        abortRef.current = controller;
         referencesRef.current = [];
         setStatusMessages([]);
         setIsStreaming(true);
 
-        const res = await fetch(`${backendURL}/query-stream`, {
+        const res = await fetch(`${backendURL}/query`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-          signal: controller.signal,
         });
 
-        if (!res.body) return console.error("No response stream");
+        if (!res.ok) throw new Error("Failed to create query job");
+        const { job_id } = (await res.json()) as { job_id: string };
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() || "";
-
-          for (const part of parts) {
-            if (!part.startsWith("data:")) continue;
-            const jsonStr = part.replace("data: ", "").trim();
-            if (!jsonStr) continue;
-
-            try {
-              const parsed = JSON.parse(jsonStr);
-
-              if (parsed.event === "token") {
-                updateLastAssistantMessage((prev) => prev + parsed.data);
-              } else if (parsed.event === "status") {
-                // surface status updates in a small panel
-                if (typeof parsed.data === "string") {
-                  setStatusMessages((prev) => [...prev, parsed.data]);
-                }
-              } else if (parsed.event === "references") {
-                // save server-provided references to attach at the end
-                if (Array.isArray(parsed.data)) {
-                  referencesRef.current = parsed.data;
-                }
-              } else if (parsed.event === "done") {
-                const finalMsg = useChatStore.getState().messages.at(-1);
-                let content = finalMsg?.content ?? "";
-
-                // Always strip inline [Source: ...] blocks and insert [n] markers
-                const extracted = extractAndNumberSources(content);
-                content = extracted.text;
-
-                // Build source docs: dedupe and order by first appearance in extracted.sources
-                // If server references exist, map them by (url|pages) and project onto extracted order
-                let finalSourceDocs: {
-                  title: string;
-                  url: string;
-                  pages?: string;
-                  excerpt?: string;
-                  source?: string;
-                  text?: string;
-                }[] = [];
-
-                const serverRefs = referencesRef.current || [];
-
-                // Helper to normalize a server page_range to string
-                const normalizePages = (
-                  pr: ServerReference["page_range"]
-                ): string | undefined => {
-                  if (Array.isArray(pr) && pr.length === 2) {
-                    return `${pr[0]}-${pr[1]}`;
-                  }
-                  if (typeof pr === "string") return pr;
-                  return undefined;
-                };
-
-                const trimExcerpt = (t?: string | null) => {
-                  const str = (t || "").trim();
-                  if (!str) return undefined;
-                  // limit to ~220 chars for display
-                  return str.length > 220 ? `${str.slice(0, 220)}…` : str;
-                };
-
-                if (serverRefs.length && extracted.sources?.length) {
-                  const serverMap = new Map<
-                    string,
-                    {
-                      url: string;
-                      pages?: string;
-                      excerpt?: string;
-                      source?: string;
-                      title?: string;
-                      text?: string;
-                    }
-                  >();
-                  serverRefs.forEach((ref) => {
-                    const pagesStr = normalizePages(ref.page_range);
-                    const url = ref.file_url || "";
-                    const key = `${url}|${pagesStr || ""}`;
-                    if (!serverMap.has(key)) {
-                      serverMap.set(key, {
-                        url: url || "#",
-                        pages: pagesStr,
-                        excerpt: trimExcerpt(ref.text),
-                        source: ref.source || undefined,
-                        title: ref.file_name || undefined,
-                        text: ref.text || undefined,
-                      });
-                    }
-                  });
-
-                  const mappedDocs = extracted.sources.map((src, i) => {
-                    const key = `${src.url}|${src.pages || ""}`;
-                    let match = serverMap.get(key);
-
-                    // Fallback: if key match fails, try positional mapping
-                    if (!match) {
-                      const fb = serverRefs[i];
-                      if (fb && fb.file_url) {
-                        match = {
-                          url: (fb.file_url as string) || "#",
-                          pages: normalizePages(fb.page_range),
-                          excerpt: trimExcerpt(fb.text),
-                          source: fb.source || undefined,
-                          title: fb.file_name || undefined,
-                          text: fb.text || undefined,
-                        };
-                      }
-                    }
-
-                    const url = match?.url || src.url || "#";
-                    const pages = match?.pages || src.pages;
-                    const excerpt = match?.excerpt;
-                    const source = match?.source;
-                    const title = match?.title || `Reference [${i + 1}]`;
-                    const text = match?.text;
-                    return { title, url, pages, excerpt, source, text };
-                  });
-
-                  // Append any graph-only references (no URL) that weren't matched via inline sources
-                  const graphOnly = serverRefs.filter(
-                    (r) => r.source === "graph_db" || !r.file_url
-                  );
-                  const graphDocs = graphOnly.map((ref) => ({
-                    title: ref.file_name || "Graph Database",
-                    url: ref.file_url || "#",
-                    pages: normalizePages(ref.page_range),
-                    excerpt: trimExcerpt(ref.text),
-                    source: ref.source || "graph_db",
-                    text: ref.text || undefined,
-                  }));
-
-                  finalSourceDocs = [...mappedDocs, ...graphDocs];
-                } else if (extracted.sources?.length) {
-                  finalSourceDocs = extracted.sources.map((src, i) => ({
-                    title: `Reference [${i + 1}]`,
-                    url: src.url || "#",
-                    pages: src.pages,
-                  }));
-                } else if (serverRefs.length) {
-                  // No inline source blocks, but server provided references: dedupe and list
-                  const seen = new Set<string>();
-                  const unique = serverRefs.filter((ref) => {
-                    const pagesStr = normalizePages(ref.page_range) || "";
-                    const key = `${ref.file_url || ""}|${pagesStr}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                  });
-                  finalSourceDocs = unique.map((ref, i) => ({
-                    title:
-                      (ref.source === "graph_db" &&
-                        (ref.file_name || "Graph Database")) ||
-                      ref.file_name ||
-                      `Reference [${i + 1}]`,
-                    url: ref.file_url || "#",
-                    pages: normalizePages(ref.page_range),
-                    excerpt: trimExcerpt(ref.text),
-                    source: ref.source || undefined,
-                    text: ref.text || undefined,
-                  }));
-                }
-
-                updateLastAssistantMessage(content, finalSourceDocs);
-
-                addMessageToDb(chatId as string, {
-                  ...aiMsg,
-                  content: content || "",
-                  sourceDocs: finalSourceDocs,
-                });
-              }
-            } catch (err) {
-              console.error("Error parsing stream part:", err);
+        const poll = async () => {
+          try {
+            const r = await fetch(`${backendURL}/jobs/${job_id}`);
+            if (!r.ok) return;
+            const job = await r.json();
+            if (Array.isArray(job.messages)) setStatusMessages(job.messages);
+            if (Array.isArray(job.references)) {
+              referencesRef.current = job.references as ServerReference[];
             }
+            if (job.status === "finished") {
+              const content: string = job?.result?.content || "";
+              const refs: ServerReference[] = (job?.result?.references ||
+                []) as ServerReference[];
+
+              // Strip inline sources and number
+              const extracted = extractAndNumberSources(content);
+              const cleanContent = extracted.text;
+
+              // Build source docs similar to previous logic
+              let finalSourceDocs: {
+                title: string;
+                url: string;
+                pages?: string;
+                excerpt?: string;
+                source?: string;
+                text?: string;
+              }[] = [];
+
+              const normalizePages = (
+                pr: ServerReference["page_range"]
+              ): string | undefined => {
+                if (Array.isArray(pr) && pr.length === 2) {
+                  return `${pr[0]}-${pr[1]}`;
+                }
+                if (typeof pr === "string") return pr;
+                return undefined;
+              };
+
+              const trimExcerpt = (t?: string | null) => {
+                const str = (t || "").trim();
+                if (!str) return undefined;
+                return str.length > 220 ? `${str.slice(0, 220)}…` : str;
+              };
+
+              if (refs.length && extracted.sources?.length) {
+                const serverMap = new Map<
+                  string,
+                  {
+                    url: string;
+                    pages?: string;
+                    excerpt?: string;
+                    source?: string;
+                    title?: string;
+                    text?: string;
+                  }
+                >();
+                refs.forEach((ref) => {
+                  const pagesStr = normalizePages(ref.page_range);
+                  const url = ref.file_url || "";
+                  const key = `${url}|${pagesStr || ""}`;
+                  if (!serverMap.has(key)) {
+                    serverMap.set(key, {
+                      url: url || "#",
+                      pages: pagesStr,
+                      excerpt: trimExcerpt(ref.text),
+                      source: ref.source || undefined,
+                      title: ref.file_name || undefined,
+                      text: ref.text || undefined,
+                    });
+                  }
+                });
+                const mappedDocs = extracted.sources.map((src, i) => {
+                  const key = `${src.url}|${src.pages || ""}`;
+                  let match = serverMap.get(key);
+                  if (!match) {
+                    const fb = refs[i];
+                    if (fb && fb.file_url) {
+                      match = {
+                        url: (fb.file_url as string) || "#",
+                        pages: normalizePages(fb.page_range),
+                        excerpt: trimExcerpt(fb.text),
+                        source: fb.source || undefined,
+                        title: fb.file_name || undefined,
+                        text: fb.text || undefined,
+                      };
+                    }
+                  }
+                  const url = match?.url || src.url || "#";
+                  const pages = match?.pages || src.pages;
+                  const excerpt = match?.excerpt;
+                  const source = match?.source;
+                  const title = match?.title || `Reference [${i + 1}]`;
+                  const text = match?.text;
+                  return { title, url, pages, excerpt, source, text };
+                });
+                const graphOnly = refs.filter(
+                  (r) => r.source === "graph_db" || !r.file_url
+                );
+                const graphDocs = graphOnly.map((ref) => ({
+                  title: ref.file_name || "Graph Database",
+                  url: ref.file_url || "#",
+                  pages: normalizePages(ref.page_range),
+                  excerpt: trimExcerpt(ref.text),
+                  source: ref.source || "graph_db",
+                  text: ref.text || undefined,
+                }));
+                finalSourceDocs = [...mappedDocs, ...graphDocs];
+              } else if (extracted.sources?.length) {
+                finalSourceDocs = extracted.sources.map((src, i) => ({
+                  title: `Reference [${i + 1}]`,
+                  url: src.url || "#",
+                  pages: src.pages,
+                }));
+              } else if (refs.length) {
+                const seen = new Set<string>();
+                const unique = refs.filter((ref) => {
+                  const pagesStr = normalizePages(ref.page_range) || "";
+                  const key = `${ref.file_url || ""}|${pagesStr}`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
+                finalSourceDocs = unique.map((ref, i) => ({
+                  title:
+                    (ref.source === "graph_db" &&
+                      (ref.file_name || "Graph Database")) ||
+                    ref.file_name ||
+                    `Reference [${i + 1}]`,
+                  url: ref.file_url || "#",
+                  pages: normalizePages(ref.page_range),
+                  excerpt: trimExcerpt(ref.text),
+                  source: ref.source || undefined,
+                  text: ref.text || undefined,
+                }));
+              }
+
+              updateLastAssistantMessage(cleanContent, finalSourceDocs);
+              addMessageToDb(chatId as string, {
+                ...aiMsg,
+                content: cleanContent || "",
+                sourceDocs: finalSourceDocs,
+              });
+              if (pollRef.current) clearInterval(pollRef.current);
+              setIsStreaming(false);
+            } else if (job.status === "failed") {
+              updateLastAssistantMessage(
+                (prev) =>
+                  prev +
+                  `\n\n[Error] ${
+                    job.error_message || job.message || "Query failed"
+                  }`
+              );
+              if (pollRef.current) clearInterval(pollRef.current);
+              setIsStreaming(false);
+            }
+          } catch (e) {
+            console.error(e);
           }
-        }
+        };
+        await poll();
+        pollRef.current = setInterval(poll, 1000);
       } catch (err) {
         console.error("Error in handleSubmit:", err);
-      } finally {
         setIsStreaming(false);
       }
     },
@@ -331,10 +305,9 @@ const ChatPage = () => {
     }
   });
 
-  // Abort in-flight stream on unmount
   useEffect(() => {
     return () => {
-      abortRef.current?.abort();
+      if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
 

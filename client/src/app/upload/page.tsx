@@ -1,15 +1,10 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   FileText,
   Upload as UploadIcon,
@@ -26,14 +21,15 @@ interface UploadedFile {
   fileId: string;
 }
 
-interface StreamStatus {
-  status: string;
-  message: string;
-  batch?: number;
-  total_batches?: number;
-  total_pages?: number;
-  page_range?: [number, number];
-  chunk_count?: number;
+interface JobItem {
+  job_id: string;
+  status: "queued" | "started" | "finished" | "failed";
+  progress?: number;
+  message?: string;
+  messages?: string[];
+  error_message?: string | null;
+  result?: unknown;
+  meta?: unknown;
 }
 
 const backendURL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL;
@@ -48,6 +44,7 @@ export default function AdminUploadPage() {
   const [search, setSearch] = useState("");
   const [progress, setProgress] = useState(0);
   const [streamMessages, setStreamMessages] = useState<string[]>([]);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch files from API (S3 list) on mount and after uploads
   const fetchFiles = async () => {
@@ -131,7 +128,7 @@ export default function AdminUploadPage() {
 
       setStreamMessages(["File uploaded, starting processing..."]);
 
-      // Step 2: Call the embed-pdf-stream endpoint
+      // Step 2: Call the embed-pdf job endpoint
       const payload = {
         file_url: fileUrl,
         file_name: file.name,
@@ -144,7 +141,7 @@ export default function AdminUploadPage() {
         },
       };
 
-      const response = await fetch(`${backendURL}/embed-pdf-stream`, {
+      const response = await fetch(`${backendURL}/embed-pdf`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -152,76 +149,37 @@ export default function AdminUploadPage() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.body) {
-        throw new Error("No response stream");
-      }
+      if (!response.ok) throw new Error("Failed to create embed job");
+      const { job_id } = (await response.json()) as { job_id: string };
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let totalBatches = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-
-        for (const part of parts) {
-          if (!part.startsWith("data:")) continue;
-          const jsonStr = part.replace("data: ", "").trim();
-          if (!jsonStr) continue;
-
-          try {
-            const parsed: StreamStatus = JSON.parse(jsonStr);
-
-            // Update stream messages
-            setStreamMessages((prev) => [...prev, parsed.message]);
-
-            // Update progress based on status
-            if (parsed.status === "started") {
-              setProgress(5);
-            } else if (parsed.status === "downloading") {
-              setProgress(10);
-            } else if (parsed.status === "downloaded") {
-              setProgress(15);
-            } else if (parsed.status === "pages_detected") {
-              setProgress(20);
-            } else if (parsed.status === "converting_batch") {
-              if (parsed.batch && parsed.total_batches) {
-                totalBatches = parsed.total_batches;
-                const batchProgress =
-                  (parsed.batch / parsed.total_batches) * 60;
-                setProgress(20 + batchProgress);
-              }
-            } else if (parsed.status === "batch_complete") {
-              if (parsed.batch && totalBatches) {
-                const batchProgress = (parsed.batch / totalBatches) * 60;
-                setProgress(20 + batchProgress);
-              }
-            } else if (parsed.status === "completed") {
-              setProgress(100);
-              setMessage("✅ PDF uploaded and embedded successfully!");
-
-              // Refresh list from server
-              await fetchFiles();
-              setFile(null);
-
-              // Clear stream messages after a delay
-              setTimeout(() => {
-                setStreamMessages([]);
-              }, 3000);
-            } else if (parsed.status === "error") {
-              setMessage(`❌ Error: ${parsed.message}`);
-              setProgress(0);
-            }
-          } catch (err) {
-            console.error("Error parsing stream part:", err);
+      // Poll job status
+      const poll = async () => {
+        try {
+          const r = await fetch(`${backendURL}/jobs/${job_id}`);
+          if (!r.ok) return;
+          const job: JobItem = await r.json();
+          setProgress(job.progress ?? 0);
+          if (Array.isArray(job.messages)) setStreamMessages(job.messages);
+          if (job.status === "finished") {
+            setMessage("✅ PDF uploaded and embedded successfully!");
+            setProgress(100);
+            if (pollRef.current) clearInterval(pollRef.current);
+            await fetchFiles();
+            setFile(null);
+            setTimeout(() => setStreamMessages([]), 3000);
+          } else if (job.status === "failed") {
+            setMessage(
+              `❌ Error: ${job.error_message || job.message || "Failed"}`
+            );
+            setProgress(0);
+            if (pollRef.current) clearInterval(pollRef.current);
           }
+        } catch (e) {
+          console.error(e);
         }
-      }
+      };
+      await poll();
+      pollRef.current = setInterval(poll, 1500);
     } catch (error) {
       console.error("Upload error:", error);
       setMessage(
